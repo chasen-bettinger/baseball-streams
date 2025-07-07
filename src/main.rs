@@ -1,3 +1,4 @@
+use chrono;
 use reqwest;
 use serde_json;
 use tokio;
@@ -8,7 +9,7 @@ struct Game {
 }
 
 async fn get_schedule() -> Result<Vec<Game>, Box<dyn std::error::Error>> {
-    let date = "2025-07-06";
+    let date = chrono::Local::now().format("%Y-%m-%d").to_string();
     let body = reqwest::get(format!(
         "http://statsapi.mlb.com/api/v1/schedule?sportId=1&hydrate=team,linescore&date={}",
         date
