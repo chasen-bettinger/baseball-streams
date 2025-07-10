@@ -18,11 +18,10 @@ fn write_json_to_disk(
     Ok(())
 }
 
-async fn get_schedule() -> Result<Vec<Game>, Box<dyn std::error::Error>> {
-    let date = chrono::Local::now().format("%Y-%m-%d").to_string();
+async fn get_schedule(date_string: &str) -> Result<Vec<Game>, Box<dyn std::error::Error>> {
     let body = reqwest::get(format!(
         "http://statsapi.mlb.com/api/v1/schedule?sportId=1&hydrate=team,linescore&date={}",
-        date
+        date_string
     ))
     .await?
     .text()
@@ -139,7 +138,15 @@ async fn get_streams(sources: Vec<serde_json::Value>) -> Result<(), Box<dyn std:
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let games = get_schedule().await?;
+    let date = chrono::Local::now().format("%Y-%m-%d").to_string();
+    let mut games = get_schedule(&date).await?;
+
+    if games.len() == 0 {
+        let date = (chrono::Local::now() - chrono::Duration::days(1))
+            .format("%Y-%m-%d")
+            .to_string();
+        games = get_schedule(&date).await?;
+    }
 
     println!("\nAvailable games:");
     for (i, game) in games.iter().enumerate() {
