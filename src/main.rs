@@ -1,11 +1,21 @@
 use chrono;
 use reqwest;
 use serde_json;
+use std::fs;
 use tokio;
 
 struct Game {
     title: String,
     id: String,
+}
+
+fn write_json_to_disk(
+    map: &serde_json::Value,
+    filename: &str,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let json_string = serde_json::to_string_pretty(map)?;
+    fs::write(filename, json_string)?;
+    Ok(())
 }
 
 async fn get_schedule() -> Result<Vec<Game>, Box<dyn std::error::Error>> {
@@ -27,7 +37,10 @@ async fn get_schedule() -> Result<Vec<Game>, Box<dyn std::error::Error>> {
             .as_array()
             .unwrap()
             .iter()
-            .filter(|game| game["status"]["statusCode"] != "F")
+            .filter(|game| {
+                let status = game["status"]["abstractGameCode"].as_str().unwrap_or("");
+                status != "F" && status != "P"
+            })
             .for_each(|game| {
                 let home_team = game["teams"]["home"]["team"]["abbreviation"]
                     .as_str()
@@ -35,11 +48,22 @@ async fn get_schedule() -> Result<Vec<Game>, Box<dyn std::error::Error>> {
                 let away_team = game["teams"]["away"]["team"]["abbreviation"]
                     .as_str()
                     .unwrap();
-                let home_team_score = game["teams"]["home"]["score"].as_u64().unwrap();
-                let away_team_score = game["teams"]["away"]["score"].as_u64().unwrap();
-                let linescore = game["linescore"].as_object().unwrap();
-                let inning = linescore["currentInningOrdinal"].as_str().unwrap();
-                let inning_half = linescore["inningHalf"].as_str().unwrap();
+
+                let game_key = format!("{}_{}", home_team, away_team);
+                let home_team_score = game["teams"]["home"]["score"].as_u64().unwrap_or(0);
+                let away_team_score = game["teams"]["away"]["score"].as_u64().unwrap_or(0);
+
+                let default_map = &serde_json::Map::new();
+                let linescore = game["linescore"].as_object().unwrap_or(default_map);
+
+                let inning = linescore
+                    .get("currentInningOrdinal")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("N/A");
+                let inning_half = linescore
+                    .get("inningHalf")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("Top");
 
                 let mut inning_char = "Top of";
                 if inning_half == "Bottom" {
